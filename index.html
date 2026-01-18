@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Leer het Alfabet!</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Nunito', sans-serif;
+            background-color: #f0f9ff;
+            overscroll-behavior: none;
+        }
+        
+        .title-font {
+            font-family: 'Fredoka One', cursive;
+        }
+
+        #canvas-container {
+            position: relative;
+            width: 300px;
+            height: 300px;
+            margin: 0 auto;
+            background-color: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            touch-action: none;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            border-radius: 20px;
+            cursor: crosshair;
+        }
+
+        .btn {
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+        .btn:active {
+            transform: scale(0.95);
+        }
+
+        #confetti-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        .pulse {
+            animation: pulse-animation 1.5s infinite;
+        }
+
+        @keyframes pulse-animation {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        /* Progress Bar Styles */
+        .progress-container {
+            width: 300px;
+            margin: 10px auto 0;
+            background-color: #e5e7eb;
+            border-radius: 999px;
+            height: 12px;
+            overflow: hidden;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        #progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4ade80, #3b82f6);
+            width: 0%;
+            transition: width 0.2s ease-out;
+            border-radius: 999px;
+        }
+
+        /* Menu Overlay Styles */
+        #menu-overlay {
+            transition: opacity 0.3s ease-in-out, visibility 0.3s;
+        }
+        #menu-overlay.hidden-menu {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+        #menu-overlay.visible-menu {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden">
+
+    <canvas id="confetti-canvas"></canvas>
+
+    <!-- Header: Menu, Score, Reset (Fixed relative positioning to prevent overlap) -->
+    <div class="w-full max-w-md mx-auto p-4 flex justify-between items-center z-40 relative flex-none">
+        <!-- Menu Button -->
+        <button id="menuBtn" class="bg-white text-blue-500 p-3 rounded-full shadow-lg btn hover:bg-gray-50" title="Menu">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+        </button>
+
+        <!-- Score -->
+        <div class="bg-yellow-400 text-white px-6 py-2 rounded-full shadow-lg font-bold text-xl title-font flex items-center gap-2">
+            <span>⭐</span> <span id="score">0 / 26</span>
+        </div>
+
+        <!-- Reset Button -->
+        <button onclick="app.resetGame()" class="bg-white text-gray-400 p-3 rounded-full shadow-lg btn hover:text-red-500" title="Reset">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+        </button>
+    </div>
+
+    <!-- Main Content (Flex grow to center vertically in remaining space) -->
+    <div class="text-center space-y-4 w-full px-4 flex-grow flex flex-col items-center justify-center">
+        
+        <h1 class="text-3xl md:text-4xl text-blue-600 title-font mb-2">Trek de letter over!</h1>
+        
+        <p id="instruction" class="text-gray-600 text-lg min-h-[1.75rem]">Zeg: "Dit is de letter..."</p>
+
+        <!-- Canvas Area -->
+        <div>
+            <div id="canvas-container">
+                <canvas id="letterCanvas" width="300" height="300"></canvas>
+            </div>
+            <!-- Progress Bar -->
+            <div class="progress-container">
+                <div id="progress-fill"></div>
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="flex flex-wrap justify-center gap-3 mt-6 max-w-md mx-auto">
+            <!-- Clear Button -->
+            <button id="clearBtn" class="btn bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-3 rounded-xl font-bold text-lg shadow-md flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+            </button>
+
+            <!-- Speak (Microphone) Button -->
+            <button id="micBtn" class="btn bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-xl font-bold text-lg shadow-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed min-w-[160px] justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                </svg>
+                Zeg de letter
+            </button>
+
+            <!-- Hear Letter (Speaker) Button -->
+            <button id="hearBtn" class="btn bg-orange-400 hover:bg-orange-500 text-white px-4 py-3 rounded-xl font-bold text-lg shadow-lg flex items-center gap-2" title="Hoor de letter">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                </svg>
+            </button>
+        </div>
+        
+        <div class="min-h-[3rem] flex items-center justify-center px-4 mb-4">
+            <p id="status" class="text-lg font-bold text-gray-500 mt-2 break-words"></p>
+        </div>
+    </div>
+
+    <!-- Menu Overlay -->
+    <div id="menu-overlay" class="hidden-menu fixed inset-0 bg-blue-600 bg-opacity-95 z-50 flex flex-col items-center justify-center p-4">
+        <div class="w-full max-w-2xl bg-white rounded-3xl p-6 shadow-2xl overflow-y-auto max-h-[90vh]">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-3xl text-blue-600 title-font">Mijn Letters</h2>
+                <button id="closeMenuBtn" class="p-2 bg-gray-100 rounded-full hover:bg-gray-200">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            
+            <div id="letterGrid" class="grid grid-cols-4 sm:grid-cols-6 gap-3">
+                <!-- Letters will be injected here -->
+            </div>
+            
+            <div class="mt-6 text-center">
+                <p class="text-gray-500 font-bold" id="progressText">0 / 26 letters gehaald</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Confetti Logic (Unchanged) ---
+        class ConfettiSystem {
+            constructor() {
+                this.canvas = document.getElementById('confetti-canvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.resize();
+                window.addEventListener('resize', () => this.resize());
+                this.particles = [];
+                this.isActive = false;
+            }
+            resize() {
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+            }
+            start() {
+                this.particles = [];
+                const colors = ['#EF476F', '#FFD166', '#06D6A0', '#118AB2', '#073B4C'];
+                for (let i = 0; i < 150; i++) {
+                    this.particles.push({
+                        x: window.innerWidth / 2,
+                        y: window.innerHeight / 2,
+                        r: Math.random() * 6 + 4,
+                        dx: Math.random() * 10 - 5,
+                        dy: Math.random() * 10 - 5,
+                        color: colors[Math.floor(Math.random() * colors.length)],
+                        tilt: Math.floor(Math.random() * 10) - 10,
+                        tiltAngle: 0,
+                        tiltAngleIncremental: Math.random() * 0.07 + 0.05
+                    });
+                }
+                this.isActive = true;
+                this.animate();
+            }
+            animate() {
+                if (!this.isActive) return;
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                this.particles.forEach((p, index) => {
+                    p.tiltAngle += p.tiltAngleIncremental;
+                    p.y += (Math.cos(p.tiltAngle) + 3 + p.r / 2) / 2;
+                    p.x += Math.sin(p.tiltAngle) * 2;
+                    p.tilt = Math.sin(p.tiltAngle) * 15;
+                    this.ctx.beginPath();
+                    this.ctx.lineWidth = p.r;
+                    this.ctx.strokeStyle = p.color;
+                    this.ctx.moveTo(p.x + p.tilt + p.r / 2, p.y);
+                    this.ctx.lineTo(p.x + p.tilt, p.y + p.tilt + p.r / 2);
+                    this.ctx.stroke();
+                    if (p.y > window.innerHeight) {
+                        this.particles.splice(index, 1);
+                    }
+                });
+                if (this.particles.length > 0) {
+                    requestAnimationFrame(() => this.animate());
+                } else {
+                    this.isActive = false;
+                }
+            }
+        }
+
+        // --- Audio Logic (Unchanged) ---
+        class AudioSystem {
+            constructor() {
+                this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                this.encouragements = [
+                    "Probeer het nog eens!",
+                    "Bijna goed, probeer het nog eens.",
+                    "Nog een keer!",
+                    "Niet helemaal, probeer het opnieuw."
+                ];
+            }
+            resumeContext() {
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+            playSuccess() {
+                this.resumeContext();
+                const now = this.ctx.currentTime;
+                this.playTone(523.25, 'sine', now, 0.1); 
+                this.playTone(659.25, 'sine', now + 0.1, 0.1); 
+                this.playTone(783.99, 'sine', now + 0.2, 0.3); 
+                this.speak("Goed gedaan!");
+            }
+            playError() {
+                this.resumeContext();
+                const now = this.ctx.currentTime;
+                this.playTone(200, 'sawtooth', now, 0.3);
+                const text = this.encouragements[Math.floor(Math.random() * this.encouragements.length)];
+                this.speak(text);
+            }
+            speak(text) {
+                if ('speechSynthesis' in window) {
+                    window.speechSynthesis.cancel();
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    utterance.lang = 'nl-NL';
+                    utterance.rate = 0.9; 
+                    utterance.pitch = 1.1;
+                    window.speechSynthesis.speak(utterance);
+                }
+            }
+            playTone(freq, type, startTime, duration) {
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = type;
+                osc.frequency.value = freq;
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(startTime);
+                gain.gain.setValueAtTime(0.1, startTime);
+                gain.gain.exponentialRampToValueAtTime(0.00001, startTime + duration);
+                osc.stop(startTime + duration);
+            }
+        }
+
+        // --- Game Logic ---
+        class Game {
+            constructor() {
+                // Lowercase alphabet
+                this.letters = "abcdefghijklmnopqrstuvwxyz".split('');
+                // Keep track of completed letters (Use a Set for uniqueness)
+                this.completedLetters = new Set();
+                
+                // Randomize order for the game loop
+                this.shuffleLetters();
+                
+                this.currentLetterIndex = 0;
+                this.isDrawing = false;
+                this.isListening = false;
+                
+                this.initialGuidePixels = 0;
+                this.lastProgressCheck = 0;
+                
+                // DOM Elements
+                this.canvas = document.getElementById('letterCanvas');
+                this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
+                this.scoreEl = document.getElementById('score');
+                this.statusEl = document.getElementById('status');
+                this.micBtn = document.getElementById('micBtn');
+                this.hearBtn = document.getElementById('hearBtn');
+                this.clearBtn = document.getElementById('clearBtn');
+                this.instructionEl = document.getElementById('instruction');
+                this.progressFill = document.getElementById('progress-fill');
+                this.menuOverlay = document.getElementById('menu-overlay');
+                this.menuBtn = document.getElementById('menuBtn');
+                this.closeMenuBtn = document.getElementById('closeMenuBtn');
+                this.letterGrid = document.getElementById('letterGrid');
+                this.progressText = document.getElementById('progressText');
+                
+                this.confetti = new ConfettiSystem();
+                this.audio = new AudioSystem();
+
+                this.bindEvents();
+                this.setupSpeech();
+                this.loadLetter();
+            }
+
+            shuffleLetters() {
+                for (let i = this.letters.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [this.letters[i], this.letters[j]] = [this.letters[j], this.letters[i]];
+                }
+            }
+
+            get currentLetter() {
+                return this.letters[this.currentLetterIndex];
+            }
+
+            // --- Menu Functions ---
+            toggleMenu() {
+                if (this.menuOverlay.classList.contains('hidden-menu')) {
+                    this.renderMenu();
+                    this.menuOverlay.classList.remove('hidden-menu');
+                    this.menuOverlay.classList.add('visible-menu');
+                } else {
+                    this.menuOverlay.classList.add('hidden-menu');
+                    this.menuOverlay.classList.remove('visible-menu');
+                }
+            }
+
+            renderMenu() {
+                this.letterGrid.innerHTML = '';
+                const allLetters = "abcdefghijklmnopqrstuvwxyz".split('');
+                let count = 0;
+
+                allLetters.forEach(letter => {
+                    const isCompleted = this.completedLetters.has(letter);
+                    if (isCompleted) count++;
+
+                    const div = document.createElement('div');
+                    div.className = `aspect-square flex flex-col items-center justify-center rounded-2xl text-2xl font-bold border-2 
+                        ${isCompleted 
+                            ? 'bg-green-100 border-green-500 text-green-600' 
+                            : 'bg-gray-50 border-gray-200 text-gray-300'}`;
+                    
+                    div.innerHTML = `
+                        <span>${letter}</span>
+                        ${isCompleted ? '<span class="text-sm">✓</span>' : ''}
+                    `;
+                    this.letterGrid.appendChild(div);
+                });
+
+                this.progressText.textContent = `${count} / 26 letters gehaald`;
+            }
+
+            // --- Game & Speech Functions ---
+            setupSpeech() {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                
+                if (!SpeechRecognition) {
+                    this.statusEl.textContent = "Je browser ondersteunt geen spraakherkenning.";
+                    this.statusEl.classList.add('text-red-500');
+                    this.micBtn.disabled = true;
+                    this.micBtn.textContent = "Geen Mic";
+                    return;
+                }
+
+                this.recognition = new SpeechRecognition();
+                this.recognition.lang = 'nl-NL';
+                this.recognition.interimResults = false;
+                this.recognition.maxAlternatives = 10;
+                this.recognition.continuous = false;
+
+                this.recognition.onstart = () => {
+                    this.isListening = true;
+                    this.micBtn.classList.add('pulse', 'bg-red-500');
+                    this.micBtn.classList.remove('bg-blue-500');
+                    this.micBtn.innerHTML = `Ik luister...`;
+                    this.instructionEl.textContent = "Zeg: 'Dit is de letter...'";
+                    this.statusEl.textContent = "Luisteren gestart... Zeg de zin!";
+                    this.statusEl.className = 'text-lg font-bold text-gray-500 mt-2';
+                };
+
+                this.recognition.onend = () => {
+                    this.isListening = false;
+                    this.micBtn.classList.remove('pulse', 'bg-red-500');
+                    this.micBtn.classList.add('bg-blue-500');
+                    this.micBtn.innerHTML = `
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                        </svg>
+                        Zeg de letter`;
+                    this.instructionEl.textContent = "Zeg: 'Dit is de letter...'";
+                    
+                    if (this.statusEl.textContent.includes("Luisteren gestart")) {
+                        this.statusEl.textContent = "Ik hoorde niets. Druk nog eens?";
+                        this.statusEl.classList.add('text-orange-500');
+                    }
+                };
+
+                this.recognition.onresult = (event) => {
+                    if (event.results && event.results.length > 0) {
+                        const spoken = event.results[0][0].transcript.toLowerCase();
+                        this.checkResult(spoken, event.results[0]);
+                    } else {
+                         this.statusEl.textContent = "Geen spraak herkend.";
+                    }
+                };
+
+                this.recognition.onerror = (event) => {
+                    console.error("Speech Error", event.error);
+                    this.isListening = false;
+                    this.micBtn.classList.remove('pulse', 'bg-red-500');
+                    this.micBtn.classList.add('bg-blue-500');
+                    
+                    if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+                        this.statusEl.textContent = "⚠️ Microfoon geblokkeerd!";
+                        this.statusEl.classList.add('text-red-500');
+                    } else if (event.error === 'no-speech') {
+                        this.statusEl.textContent = "Ik hoorde niets. Praat iets harder?";
+                        this.statusEl.classList.add('text-orange-500');
+                        this.audio.playError();
+                    } else {
+                        this.statusEl.textContent = `Foutje: ${event.error}. Probeer opnieuw.`;
+                        this.audio.playError();
+                    }
+                };
+            }
+
+            bindEvents() {
+                const startDraw = (e) => {
+                    this.isDrawing = true;
+                    this.ctx.beginPath();
+                    const { x, y } = this.getPos(e);
+                    this.ctx.moveTo(x, y);
+                    e.preventDefault();
+                    this.audio.resumeContext(); 
+                };
+
+                const moveDraw = (e) => {
+                    if (!this.isDrawing) return;
+                    const { x, y } = this.getPos(e);
+                    this.ctx.lineTo(x, y);
+                    this.ctx.stroke();
+                    
+                    const now = Date.now();
+                    if (now - this.lastProgressCheck > 100) {
+                        this.updateProgress();
+                        this.lastProgressCheck = now;
+                    }
+                    e.preventDefault();
+                };
+
+                const endDraw = () => {
+                    this.isDrawing = false;
+                    this.ctx.closePath();
+                    this.updateProgress();
+                };
+
+                this.canvas.addEventListener('mousedown', startDraw);
+                this.canvas.addEventListener('mousemove', moveDraw);
+                this.canvas.addEventListener('mouseup', endDraw);
+                this.canvas.addEventListener('mouseout', endDraw);
+
+                this.canvas.addEventListener('touchstart', startDraw, { passive: false });
+                this.canvas.addEventListener('touchmove', moveDraw, { passive: false });
+                this.canvas.addEventListener('touchend', endDraw);
+
+                this.clearBtn.addEventListener('click', () => {
+                    this.loadLetter();
+                    this.audio.resumeContext();
+                });
+
+                this.hearBtn.addEventListener('click', () => {
+                    this.audio.resumeContext();
+                    this.audio.speak(`Dit is de letter... ${this.currentLetter}.`);
+                    this.statusEl.textContent = `De letter is ${this.currentLetter}.`;
+                    this.statusEl.className = 'text-lg font-bold text-blue-500 mt-2';
+                });
+
+                this.micBtn.addEventListener('click', () => {
+                    this.audio.resumeContext();
+                    if (this.isListening) {
+                         this.recognition.stop();
+                         return;
+                    }
+                    
+                    try {
+                        this.recognition.start();
+                        this.statusEl.textContent = "Microfoon starten...";
+                        this.statusEl.className = 'text-lg font-bold text-gray-500 mt-2';
+                    } catch (e) { 
+                        console.log(e); 
+                        this.recognition.stop();
+                        setTimeout(() => {
+                             try { this.recognition.start(); } catch(err) {}
+                        }, 200);
+                    }
+                });
+
+                // Menu Events
+                this.menuBtn.addEventListener('click', () => this.toggleMenu());
+                this.closeMenuBtn.addEventListener('click', () => this.toggleMenu());
+            }
+
+            getPos(e) {
+                const rect = this.canvas.getBoundingClientRect();
+                let clientX, clientY;
+                
+                if (e.touches) {
+                    clientX = e.touches[0].clientX;
+                    clientY = e.touches[0].clientY;
+                } else {
+                    clientX = e.clientX;
+                    clientY = e.clientY;
+                }
+
+                return {
+                    x: clientX - rect.left,
+                    y: clientY - rect.top
+                };
+            }
+
+            drawGuideLetter() {
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                this.ctx.font = 'bold 200px "Nunito", sans-serif';
+                this.ctx.fillStyle = '#e5e7eb';
+                this.ctx.textAlign = 'center';
+                this.ctx.textBaseline = 'middle';
+                this.ctx.fillText(this.currentLetter, this.canvas.width / 2, this.canvas.height / 2 + 20);
+                this.calculateGuidePixels();
+                this.ctx.strokeStyle = '#3b82f6';
+                this.ctx.lineWidth = 15;
+                this.ctx.lineCap = 'round';
+                this.ctx.lineJoin = 'round';
+            }
+
+            calculateGuidePixels() {
+                const imageData = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
+                const data = imageData.data;
+                let count = 0;
+                for (let i = 0; i < data.length; i += 4) {
+                    const r = data[i];
+                    if (r > 200 && r < 240 && data[i+3] > 20) {
+                        count++;
+                    }
+                }
+                this.initialGuidePixels = count;
+                this.updateProgressBar(0);
+            }
+
+            updateProgress() {
+                if (this.initialGuidePixels === 0) return;
+                const imageData = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
+                const data = imageData.data;
+                let currentGuidePixels = 0;
+                for (let i = 0; i < data.length; i += 4) {
+                    const r = data[i];
+                    if (r > 200 && r < 240 && data[i+3] > 20) {
+                        currentGuidePixels++;
+                    }
+                }
+                let covered = this.initialGuidePixels - currentGuidePixels;
+                let percentage = (covered / this.initialGuidePixels) * 100;
+                percentage = Math.min(100, Math.max(0, percentage));
+                this.updateProgressBar(percentage);
+            }
+
+            updateProgressBar(percent) {
+                this.progressFill.style.width = `${percent}%`;
+                if (percent > 80) {
+                    this.progressFill.style.background = '#22c55e';
+                } else {
+                    this.progressFill.style.background = 'linear-gradient(90deg, #4ade80, #3b82f6)';
+                }
+            }
+
+            loadLetter() {
+                this.drawGuideLetter();
+                this.statusEl.textContent = "";
+                this.updateProgressBar(0);
+                this.statusEl.className = 'text-lg font-bold text-gray-500 mt-2';
+            }
+
+            checkResult(spokenText, alternatives) {
+                console.log("Gehoord:", spokenText);
+                let foundMatch = false;
+                const allGuesses = [];
+                if (alternatives && alternatives.length) {
+                   for (let i = 0; i < alternatives.length; i++) {
+                       allGuesses.push(alternatives[i].transcript.toLowerCase());
+                   }
+                } else {
+                    allGuesses.push(spokenText);
+                }
+
+                const normalize = (str) => str.replace(/[^a-z]/g, '');
+
+                for (let guess of allGuesses) {
+                    let cleanSentence = guess.replace(/[.,!?;:]+$/, '').trim();
+                    let cleanGuess = normalize(guess);
+                    
+                    if (cleanGuess === this.currentLetter) { foundMatch = true; break; }
+                    if (cleanSentence.endsWith(" " + this.currentLetter)) { foundMatch = true; break; }
+                    if (guess.includes("letter " + this.currentLetter)) { foundMatch = true; break; }
+                    if (guess.startsWith(this.currentLetter + " ")) { foundMatch = true; break; }
+
+                    if (this.currentLetter === 'a' && (guess.includes('ah') || guess === 'aa' || guess.includes('ei'))) { foundMatch = true; break; }
+                    if (this.currentLetter === 'b' && (guess.includes('bee'))) { foundMatch = true; break; }
+                    if (this.currentLetter === 'c' && (guess.includes('see') || guess.includes('cee'))) { foundMatch = true; break; }
+                    if (this.currentLetter === 'e' && (guess === 'ee' || guess.includes('ay'))) { foundMatch = true; break; }
+                    if (this.currentLetter === 'i' && (guess === 'ie' || guess === 'ee')) { foundMatch = true; break; } 
+                    if (this.currentLetter === 'r' && (guess.includes('er'))) { foundMatch = true; break; }
+                    if (this.currentLetter === 'y' && (guess.includes('ij') || guess.includes('grek') || guess.includes('griekse'))) { foundMatch = true; break; }
+                }
+
+                if (foundMatch) {
+                    this.handleSuccess();
+                } else {
+                    this.statusEl.textContent = `Ik hoorde: "${spokenText}". Zeg: "Dit is de letter ${this.currentLetter}"`;
+                    this.statusEl.className = 'text-lg font-bold text-orange-500 mt-2';
+                    this.audio.playError();
+                }
+            }
+
+            handleSuccess() {
+                // Add to completed set
+                this.completedLetters.add(this.currentLetter);
+                
+                // Show unique progress x/26
+                this.scoreEl.textContent = `${this.completedLetters.size} / 26`;
+                this.statusEl.textContent = `Goedzo! Dat is de ${this.currentLetter}!`;
+                this.statusEl.className = 'text-lg font-bold text-green-500 mt-2';
+                
+                this.confetti.start();
+                this.audio.playSuccess();
+
+                this.ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                this.ctx.fillRect(0,0,300,300);
+                this.ctx.font = '100px Arial';
+                this.ctx.fillStyle = '#10B981';
+                this.ctx.fillText("✓", 150, 160);
+
+                setTimeout(() => {
+                    this.currentLetterIndex = (this.currentLetterIndex + 1) % this.letters.length;
+                    this.loadLetter();
+                }, 2500);
+            }
+
+            resetGame() {
+                this.scoreEl.textContent = "0 / 26";
+                this.completedLetters.clear(); // Clear history
+                this.shuffleLetters();
+                this.currentLetterIndex = 0;
+                this.loadLetter();
+            }
+        }
+
+        let app;
+        window.addEventListener('DOMContentLoaded', () => {
+            app = new Game();
+        });
+
+    </script>
+</body>
+</html>
