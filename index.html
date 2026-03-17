@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stencil Maker</title>
+    <title>Spray Paint Stencil Maker</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            max-width: 800px;
+            max-width: 850px;
             margin: 0 auto;
             padding: 20px;
             background-color: #f5f5f5;
@@ -15,18 +15,33 @@
         }
         .container {
             background: white;
-            padding: 20px;
+            padding: 25px;
             border-radius: 8px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
         .controls {
             display: flex;
+            flex-wrap: wrap;
             gap: 15px;
             margin-bottom: 20px;
             align-items: center;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            border: 1px solid #e9ecef;
         }
-        button, select, input[type="file"] {
-            padding: 10px;
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        label {
+            font-size: 0.85em;
+            font-weight: bold;
+            color: #555;
+        }
+        button, select, input[type="file"], input[type="range"] {
+            padding: 8px;
             border-radius: 4px;
             border: 1px solid #ccc;
         }
@@ -36,6 +51,8 @@
             border: none;
             cursor: pointer;
             font-weight: bold;
+            padding: 12px 20px;
+            margin-top: auto;
         }
         button:hover { background-color: #0056b3; }
         button:disabled { background-color: #cccccc; cursor: not-allowed; }
@@ -49,33 +66,51 @@
             text-align: center;
             background: #fff;
             padding: 10px;
-            border: 1px solid #eee;
+            border: 1px solid #ddd;
             border-radius: 4px;
+            flex: 1 1 300px;
         }
         canvas {
             max-width: 100%;
             height: auto;
             border: 1px solid #ccc;
             margin-bottom: 10px;
+            background: #eee;
         }
         #status {
             font-style: italic;
             color: #666;
+            margin-bottom: 15px;
         }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>Multi-Layer Stencil Generator</h2>
-    <p>Upload an image to generate separated black-and-white stencil layers.</p>
+    <h2>Spray Paint Stencil Maker</h2>
+    <p>Upload an image and adjust the smoothness to generate clean, cuttable stencil layers.</p>
 
     <div class="controls">
-        <input type="file" id="imageInput" accept="image/png, image/jpeg, image/webp">
-        <select id="layerCount">
-            <option value="3">3 Layers</option>
-            <option value="4" selected>4 Layers</option>
-        </select>
+        <div class="control-group">
+            <label for="imageInput">1. Choose Image</label>
+            <input type="file" id="imageInput" accept="image/png, image/jpeg, image/webp">
+        </div>
+        
+        <div class="control-group">
+            <label for="layerCount">2. Stencil Layers</label>
+            <select id="layerCount">
+                <option value="2">1 Stencil Layer (2 Colors)</option>
+                <option value="3">2 Stencil Layers (3 Colors)</option>
+                <option value="4">3 Stencil Layers (4 Colors)</option>
+                <option value="5" selected>4 Stencil Layers (5 Colors)</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label for="smoothness">3. Smoothness (Reduces tiny dots)</label>
+            <input type="range" id="smoothness" min="0" max="10" value="3">
+        </div>
+
         <button id="processBtn" disabled>Generate Stencils</button>
     </div>
 
@@ -87,12 +122,12 @@
     const imageInput = document.getElementById('imageInput');
     const processBtn = document.getElementById('processBtn');
     const layerCountSelect = document.getElementById('layerCount');
+    const smoothnessSlider = document.getElementById('smoothness');
     const statusText = document.getElementById('status');
     const outputDiv = document.getElementById('output');
     
     let sourceImage = new Image();
 
-    // Enable button when image is loaded
     imageInput.addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -102,7 +137,7 @@
             sourceImage.src = event.target.result;
             sourceImage.onload = () => {
                 processBtn.disabled = false;
-                statusText.innerText = "Image loaded. Ready to generate!";
+                statusText.innerText = "Image loaded. Adjust settings and click Generate.";
             };
         };
         reader.readAsDataURL(file);
@@ -111,16 +146,14 @@
     processBtn.addEventListener('click', function() {
         statusText.innerText = "Processing... (This might take a few seconds)";
         outputDiv.innerHTML = "";
-        
-        // Use a slight timeout to let the UI update before heavy processing blocks the thread
         setTimeout(() => generateStencils(), 50); 
     });
 
     function generateStencils() {
         const k = parseInt(layerCountSelect.value);
+        const blurAmount = smoothnessSlider.value;
         
-        // 1. Draw image to a hidden canvas and resize it for performance
-        const maxDim = 800; // Max width/height to process
+        const maxDim = 800; 
         let width = sourceImage.width;
         let height = sourceImage.height;
         
@@ -134,28 +167,26 @@
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
-        ctx.drawImage(sourceImage, 0, 0, width, height);
 
-        // 2. Get pixel data and convert to grayscale
+        // Apply visual smoothing before processing to merge tiny, un-cuttable islands
+        ctx.filter = `blur(${blurAmount}px) contrast(1.5)`;
+        ctx.drawImage(sourceImage, 0, 0, width, height);
+        ctx.filter = 'none'; // reset filter
+
         const imgData = ctx.getImageData(0, 0, width, height);
         const data = imgData.data;
         let grayValues = new Float32Array(width * height);
         
         for (let i = 0; i < data.length; i += 4) {
-            // Standard luminance calculation
             let gray = data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114;
             grayValues[i/4] = gray;
         }
 
-        // 3. Run K-Means Clustering on the grayscale values
         const { centroids, assignments } = kMeans(grayValues, k);
 
-        // 4. Sort centroids from Darkest (lowest value) to Lightest (highest value)
-        // Keep track of original indices to map assignments correctly
         let sortedCentroids = centroids.map((val, index) => ({val, index}))
                                        .sort((a, b) => a.val - b.val);
 
-        // 5. Generate a canvas for each layer
         sortedCentroids.forEach((centroidObj, layerIndex) => {
             const layerCanvas = document.createElement('canvas');
             layerCanvas.width = width;
@@ -164,14 +195,13 @@
             const layerImgData = layerCtx.createImageData(width, height);
             const lData = layerImgData.data;
 
-            // Paint the mask: Black if it belongs to this centroid, White otherwise
             for (let i = 0; i < grayValues.length; i++) {
                 const pixelIndex = i * 4;
                 if (assignments[i] === centroidObj.index) {
-                    lData[pixelIndex] = 0;     // R
-                    lData[pixelIndex+1] = 0;   // G
-                    lData[pixelIndex+2] = 0;   // B
-                    lData[pixelIndex+3] = 255; // Alpha
+                    lData[pixelIndex] = 0;     
+                    lData[pixelIndex+1] = 0;   
+                    lData[pixelIndex+2] = 0;   
+                    lData[pixelIndex+3] = 255; 
                 } else {
                     lData[pixelIndex] = 255;
                     lData[pixelIndex+1] = 255;
@@ -182,12 +212,16 @@
 
             layerCtx.putImageData(layerImgData, 0, 0);
 
-            // Create DOM elements to display
             const layerDiv = document.createElement('div');
             layerDiv.className = 'layer';
             
+            let layerName = `Layer ${layerIndex + 1}`;
+            if (layerIndex === 0) layerName += " (Darkest Paint)";
+            else if (layerIndex === k - 1) layerName += " (Lightest / Background)";
+            else layerName += " (Midtone Paint)";
+
             const title = document.createElement('h3');
-            title.innerText = `Layer ${layerIndex + 1} (${layerIndex === 0 ? 'Darkest' : layerIndex === k-1 ? 'Lightest' : 'Midtone'})`;
+            title.innerText = layerName;
             
             const downloadLink = document.createElement('a');
             downloadLink.href = layerCanvas.toDataURL("image/png");
@@ -205,10 +239,8 @@
         statusText.innerText = "Done! You can now download your layers.";
     }
 
-    // Basic 1D K-Means implementation
     function kMeans(data, k, maxIterations = 20) {
         let centroids = [];
-        // Randomly initialize centroids from existing data points
         for (let i = 0; i < k; i++) {
             centroids.push(data[Math.floor(Math.random() * data.length)]);
         }
@@ -221,7 +253,6 @@
             sums.fill(0);
             counts.fill(0);
             
-            // Assign each pixel to nearest centroid
             for (let i = 0; i < data.length; i++) {
                 let minDist = Infinity;
                 let cluster = 0;
@@ -237,7 +268,6 @@
                 counts[cluster]++;
             }
             
-            // Recalculate centroids
             let changed = false;
             for (let j = 0; j < k; j++) {
                 if (counts[j] > 0) {
